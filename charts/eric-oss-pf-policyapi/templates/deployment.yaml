@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "eric-oss-pf-policyapi.name" . }}
+  labels:
+    app: {{ template "eric-oss-pf-policyapi.name" . }}
+    {{- include "eric-oss-pf-policyapi.kubernetes-io-info" .| nindent 4 }}
+  annotations:
+  {{- include "eric-oss-pf-policyapi.eric-product-info" .| nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: {{ .Values.updateStrategy.type }}
+    {{- if and (eq .Values.updateStrategy.type "RollingUpdate") .Values.updateStrategy.rollingUpdate }}
+    rollingUpdate:
+{{ toYaml .Values.updateStrategy.rollingUpdate | indent 6 }}
+    {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      annotations:
+      {{- include "eric-oss-pf-policyapi.eric-product-info" .| nindent 8 }}
+      labels:
+        app: {{ template "eric-oss-pf-policyapi.name" . }}
+    {{- include "eric-oss-pf-policyapi.kubernetes-io-info" .| nindent 8 }}
+    spec:
+      serviceAccountName: {{ template "eric-oss-pf-policyapi.name" . }}-sa
+      {{- if  .Values.imageCredentials.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imageCredentials.pullSecret | quote }}
+      {{- else if .Values.global.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.pullSecret | quote }}
+      {{- end }}
+      
+      {{- if (index .Values.podPriority "eric-oss-pf-policyapi" "priorityClassName") }}
+      priorityClassName: {{ index .Values.podPriority "eric-oss-pf-policyapi" "priorityClassName" | quote }}
+      {{- end }}
+      
+      volumes:
+        - name: localtime
+          hostPath:
+             path: /etc/localtime
+        - name: apiconfig
+          configMap:
+            name: {{ template "eric-oss-pf-policyapi-configmap.name" . }}
+            defaultMode: 0755
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ template "eric-oss-pf-policyapi.mainImagePath" . }}"
+          imagePullPolicy: {{ include "eric-oss-pf-policyapi.imagePullPolicy" $ | quote }}
+          command: ["/opt/app/policy/api/bin/policy-api.sh"]
+          args: ["/opt/app/policy/api/etc/mounted/config.json"]
+          ports:
+          - name: http
+            containerPort: {{ .Values.port.http }}
+          - name: https
+            containerPort: {{ .Values.port.https }}
+          {{- if .Values.debug }}
+          - name: jvm-debug
+            containerPort: {{ .Values.port.jvmDebug }}
+          - name: jvm-jmx-remote
+            containerPort: {{ .Values.port.jvmJmxRemote }}
+          {{- end }}
+          env:
+          - name: APP_NAME
+            value: {{ .Chart.Name }}
+          {{- if .Values.logging.format.json }}
+          - name: LOG4J_CONFIG
+            value: "classpath:log4j2-json.xml"
+          {{- end }}
+          - name: JAVA_OPTS
+            {{- if .Values.debug }}
+            value: "{{ join " " .Values.jvmOptions }} {{ join " " .Values.jvmDebugOptions }}"
+            {{- else }}
+            value: "{{ join " " .Values.jvmOptions }}"
+            {{- end }}
+          volumeMounts:
+          - mountPath: /etc/localtime
+            name: localtime
+            readOnly: true
+          - mountPath: /opt/app/policy/api/etc/mounted
+            name: apiconfig
+          
+          resources:
+            requests:
+              memory: {{ .Values.resources.policyapi.requests.memory | quote}}
+              cpu: {{ .Values.resources.policyapi.requests.cpu}}
+              
+              {{- if index $.Values "resources" "policyapi" "requests" "ephemeral-storage" }}
+              ephemeral-storage: {{ index $.Values "resources" "policyapi" "requests" "ephemeral-storage" | quote }}
+              {{- end }} 
+            limits:
+              memory: {{ .Values.resources.policyapi.limits.memory | quote}}
+              cpu: {{ .Values.resources.policyapi.limits.cpu }}
+              
+              {{- if index $.Values "resources" "policyapi" "limits" "ephemeral-storage" }}
+              ephemeral-storage: {{ index $.Values "resources" "policyapi" "limits" "ephemeral-storage" | quote }}
+              {{- end }}
+          
+          readinessProbe:
+            {{- with .Values.probe.readiness }}
+            tcpSocket:
+              port: {{ .tcpSocket.port }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            {{- end }}
+          livenessProbe:
+            {{- with .Values.probe.liveness }}
+            tcpSocket:
+              port: {{ .tcpSocket.port }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: true
+            runAsNonRoot: true
+            runAsUser: 1000
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+        {{ toYaml .Values.nodeSelector }}
+      {{- else if .Values.global.nodeSelector }}
+      nodeSelector:
+        {{ toYaml .Values.global.nodeSelector }}
+      {{- end}}

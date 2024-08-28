@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "eric-oss-pf-policyapi.name" . }}
+  labels:
+    app: {{ template "eric-oss-pf-policyapi.name" . }}
+    {{- include "eric-oss-pf-policyapi.kubernetes-io-info" .| nindent 4 }}
+  annotations:
+  {{- include "eric-oss-pf-policyapi.eric-product-info" .| nindent 4 }}
+  
+spec:
+  ports:
+  - name: http
+    port: {{ .Values.service.port.http }}
+    targetPort: {{ .Values.port.http }}
+  - name: https
+    port: {{ .Values.service.port.https }}
+    targetPort: {{ .Values.port.https }}
+  selector:
+    app: {{ .Chart.Name }}

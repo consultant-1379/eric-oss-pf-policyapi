@@ -1,0 +1,101 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ template "eric-oss-pf-policyapi.name" . }}-rbac-configuration-configmap
+  labels:
+    app: {{ template "eric-oss-pf-policyapi.name" . }}-rbac-configuration-configmap
+  {{- include "eric-oss-pf-policyapi.kubernetes-io-info" .| nindent 4 }}
+  annotations:
+  {{- include "eric-oss-pf-policyapi.eric-product-info" .| nindent 4 }}
+data:
+  rbac-configuration.json: |
+      {
+        "roles": [{
+                        "name": "PF_POLICYAPI_Admin",
+                        "attributes": {
+                                "type": ["internal"]
+                        }
+                }, {
+                        "name": "PF_POLICYAPI_User",
+                "attributes": {
+                                "type": ["internal"]
+                        }
+                }
+        ],
+        "authorization": {
+                "resources": [{
+                        "name": "POLICYAPI Endpoints",
+                        "type": "urn:eo:pf:resources:policyapi",
+                        "ownerManagedAccess": false,
+                        "attributes": {},
+                        "uris": [
+                            "/policy/api/v1/",
+                            "/policy/api/v1/**"
+                        ],
+                        "scopes": [{
+                                "name": "GET"
+                            }, {
+                                "name": "POST"
+                            }, {
+                                "name": "DELETE"
+                            }, {
+                                "name": "PATCH"
+                            }, {
+                                "name": "PUT"
+                            }
+                        ]
+                    }
+                ],
+                "policies": [{
+                        "name": "Is PF POLICYAPI Admin",
+                        "type": "role",
+                        "logic": "POSITIVE",
+                        "decisionStrategy": "UNANIMOUS",
+                        "config": {
+                                "roles": "[{\"id\":\"PF_POLICYAPI_Admin\",\"required\":false}]"
+                        }
+                     }, {
+                        "name": "Is PF POLICYAPI User",
+                        "type": "role",
+                        "logic": "POSITIVE",
+                        "decisionStrategy": "UNANIMOUS",
+                        "config": {
+                                "roles": "[{\"id\":\"PF_POLICYAPI_User\",\"required\":false}]"
+                        }
+                     }, {
+                        "name": "Admin EO POLICYAPI",
+                        "type": "scope",
+                        "logic": "POSITIVE",
+                        "decisionStrategy": "AFFIRMATIVE",
+                        "config": {
+                                "resources": "[\"POLICYAPI Endpoints\"]",
+                                "scopes": "[\"PUT\",\"POST\",\"DELETE\",\"PATCH\"]",
+                                "applyPolicies": "[\"Is PF POLICYAPI Admin\"]"
+                        }
+                     }, {
+                        "name": "View POLICYAPI Endpoints",
+                        "type": "scope",
+                        "logic": "POSITIVE",
+                        "decisionStrategy": "AFFIRMATIVE",
+                        "config": {
+                                "resources": "[\"POLICYAPI Endpoints\"]",
+                                "scopes": "[\"GET\"]",
+                                "applyPolicies": "[\"Is PF POLICYAPI Admin\",\"Is PF POLICYAPI User\"]"
+                        }
+                    }
+                ],
+                "scopes": [{
+                                "name": "GET"
+                            }, {
+                                "name": "POST"
+                            }, {
+                                "name": "DELETE"
+                            }, {
+                                "name": "PATCH"
+                            }, {
+                                "name": "PUT"
+                            }
+                ]
+        }
+      }
+
